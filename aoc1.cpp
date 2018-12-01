@@ -1,4 +1,7 @@
+#include <limits>
 #include <utility>
+
+// first problem, sum all numbers
 
 template <typename...> struct sum;
 
@@ -15,6 +18,86 @@ struct sum<std::integer_sequence<T, lhs, rhs>>
 template <typename T, T lhs, T rhs, T... rest>
 struct sum<std::integer_sequence<T, lhs, rhs, rest...>>
     : sum<std::integer_sequence<T, (lhs + rhs), rest...>> {};
+
+// second problem, find first sum that occurs twice
+
+// check if a list contains a value
+template <typename T, T val, T... list> struct contains;
+
+template <typename T, T val> struct contains<T, val> : std::false_type {};
+
+template <typename T, T val, T test, T... rest>
+struct contains<T, val, test, rest...>
+    : std::conditional_t<(val == test), std::true_type,
+                         contains<T, val, rest...>> {};
+
+template <typename...> struct find_first_duplicate_help;
+
+// when we ran out
+template <typename T, T... test, T curr>
+struct find_first_duplicate_help<std::integer_sequence<T, test...>,
+                                 std::integral_constant<T, curr>>
+    : std::conditional_t<
+          contains<T, curr, test...>::value, std::integral_constant<T, curr>,
+          std::integral_constant<T, std::numeric_limits<T>::max()>> {};
+
+template <typename T, T... test, T curr, T next, T... rest>
+struct find_first_duplicate_help<std::integer_sequence<T, test...>,
+                                 std::integral_constant<T, curr>,
+                                 std::integer_sequence<T, next, rest...>>
+    : std::conditional_t<
+          contains<T, curr, test...>::value, std::integral_constant<T, curr>,
+          find_first_duplicate_help<std::integer_sequence<T, test..., curr>,
+                                    std::integral_constant<T, next>,
+                                    std::integer_sequence<T, rest...>>> {};
+
+template <typename T, T...> struct find_first_duplicate_splitter;
+
+template <typename T, T first, T... rest>
+struct find_first_duplicate_splitter<T, first, rest...>
+    : find_first_duplicate_help<std::integer_sequence<T>,
+                                std::integral_constant<T, first>,
+                                std::integer_sequence<T, rest...>> {};
+
+template <typename...> struct find_first_duplicate;
+
+template <typename T, T... Is>
+struct find_first_duplicate<std::integer_sequence<T, Is...>>
+    : find_first_duplicate_splitter<T, Is...> {};
+
+template <typename T, std::size_t N, T...> struct nth;
+
+template <typename T, std::size_t N>
+struct nth<T, N> : std::integral_constant<T, 0> {};
+
+template <typename T, std::size_t N, T val, T... Rest>
+struct nth<T, N, val, Rest...>
+    : std::conditional_t<(N == 0), std::integral_constant<T, val>,
+                         nth<T, (N - 1), Rest...>> {};
+
+template <typename T, T... vals> struct first : nth<T, 0, vals...> {};
+
+template <typename T, T... vals>
+struct last : nth<T, (sizeof...(vals) - 1), vals...> {};
+
+template <typename In, typename Out> struct cum_sum_help;
+
+template <typename T, T val, T... Is, T... Os>
+struct cum_sum_help<std::integer_sequence<T, val, Is...>,
+                    std::integer_sequence<T, Os...>>
+    : std::conditional_t<
+          (sizeof...(Is) == 0), // when we run out of values
+          std::integer_sequence<T, Os..., (last<T, Os...>::value + val)>,
+          cum_sum_help<
+              std::integer_sequence<T, Is...>,
+              std::integer_sequence<T, Os..., last<T, Os...>::value + val>>> {};
+
+template <typename...> struct cum_sum;
+
+template <typename T, T... Is> struct cum_sum<std::integer_sequence<T, Is...>> {
+  using type = typename cum_sum_help<std::integer_sequence<T, Is...>,
+                                     std::integer_sequence<T>>::type;
+};
 
 int main() {
   using numbers = std::integer_sequence<
@@ -81,5 +164,7 @@ int main() {
       +11, +11, -20, -17, +7, +15, -23, +6, -17, -8, -8, -4, +24, +18, +8, +17,
       -22, +19, +71889>;
 
-  return sum<numbers>::value;
+  // return find_sum_twice<numbers>::value;
+  return find_first_duplicate<typename cum_sum<numbers>::type>::value;
+  // return sum<numbers>::value;
 }
